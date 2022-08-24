@@ -12,6 +12,8 @@ class ScannedArticles extends StatefulWidget {
 
 class _ScannedArticles extends State<ScannedArticles> {
   List<Article> _articles = <Article>[];
+  List<Article> _foundArticles = <Article>[];
+
   String _scanBarcode = 'Unknown';
   bool isLoading = true;
 
@@ -42,7 +44,8 @@ class _ScannedArticles extends State<ScannedArticles> {
       final List<Article> article =
           await DBHelper.findByBarcode(int.parse(_scanBarcode));
       final _arguments = RouteArguments(article: article.first, method: "EDIT");
-      Navigator.pushNamed(context, "/form", arguments: _arguments);
+      Navigator.pushNamed(context, "/form", arguments: _arguments)
+          .whenComplete(() => setState(() => {_loadArticles()}));
     }
   }
 
@@ -75,8 +78,17 @@ class _ScannedArticles extends State<ScannedArticles> {
   void _loadArticles() async {
     var articles = await DBHelper.all();
     setState(() {
+      _foundArticles = articles;
       _articles = articles;
       isLoading = false;
+    });
+  }
+
+  onSearch(String v) {
+    setState(() {
+      _foundArticles = _articles
+          .where((article) => article.title!.toLowerCase().contains(v))
+          .toList();
     });
   }
 
@@ -88,7 +100,7 @@ class _ScannedArticles extends State<ScannedArticles> {
 
   @override
   Widget build(BuildContext context) {
-    _loadArticles();
+    // _loadArticles();
     return Scaffold(
       appBar: AppBar(
         title: const Text("Scanned Articles"),
@@ -107,21 +119,30 @@ class _ScannedArticles extends State<ScannedArticles> {
             )
           : Column(
               children: [
+                TextField(
+                  onChanged: (v) => {onSearch(v)},
+                  decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: "Search Articles",
+                      hintStyle: TextStyle(
+                        fontSize: 14,
+                      )),
+                ),
                 Expanded(
                   child: ListView.builder(
-                    itemCount: _articles.length,
+                    itemCount: _foundArticles.length,
                     // physics: const NeverScrollableScrollPhysics(),
                     itemBuilder: (BuildContext context, int index) {
                       return Card(
                         child: ListTile(
                           tileColor: Colors.amber[300],
                           title: Text(
-                            _articles[index].title.toString(),
+                            _foundArticles[index].title.toString(),
                             style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
-                            _articles[index].price.toString(),
+                            _foundArticles[index].price.toString(),
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           trailing: Wrap(
@@ -132,7 +153,7 @@ class _ScannedArticles extends State<ScannedArticles> {
                                   context,
                                   "/form",
                                   arguments: RouteArguments(
-                                      article: _articles[index],
+                                      article: _foundArticles[index],
                                       method: "EDIT"),
                                 ),
                                 icon: const Icon(Icons.edit),
@@ -140,7 +161,7 @@ class _ScannedArticles extends State<ScannedArticles> {
                               IconButton(
                                 onPressed: () {
                                   _showDeleteAlert(
-                                      context, _articles[index].id!);
+                                      context, _foundArticles[index].id!);
                                 },
                                 icon: const Icon(Icons.delete),
                               ),
@@ -205,7 +226,13 @@ class _ScannedArticles extends State<ScannedArticles> {
               article: Article(
                   barcode: int.parse(_scanBarcode), price: 0, title: ""),
               method: "ADD"),
-        );
+        ).whenComplete(() => {
+              setState(
+                () {
+                  _loadArticles();
+                },
+              )
+            });
       },
       child: const Text("Register"),
     );
