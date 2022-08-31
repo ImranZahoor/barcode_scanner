@@ -3,6 +3,7 @@ import 'package:barcode_scanner/db_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ScannedArticles extends StatefulWidget {
   const ScannedArticles({Key? key}) : super(key: key);
@@ -11,11 +12,15 @@ class ScannedArticles extends StatefulWidget {
 }
 
 class _ScannedArticles extends State<ScannedArticles> {
+  final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
   List<Article> _articles = <Article>[];
   List<Article> _foundArticles = <Article>[];
 
   String _scanBarcode = 'Unknown';
   bool isLoading = true;
+  TextEditingController _unameController = TextEditingController();
+  TextEditingController _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
   Future<void> scanBarcodeNormal() async {
     String barcodeScanRes;
@@ -49,7 +54,12 @@ class _ScannedArticles extends State<ScannedArticles> {
     }
   }
 
-  void _syncWithCloud() async {
+  void _syncWithCloud(
+      List<Article> article, String username, String password) async {
+    final SharedPreferences prefs = await _prefs;
+    await prefs.setString("username", username);
+    await prefs.setString("password", password);
+
     int result = await DBHelper.deleteAll();
     List<Article> demo_articles = <Article>[
       Article(
@@ -106,7 +116,7 @@ class _ScannedArticles extends State<ScannedArticles> {
         title: const Text("Scanned Articles"),
         actions: [
           IconButton(
-            onPressed: _syncWithCloud,
+            onPressed: _showLoginDialog,
             icon: Icon(Icons.sync),
           ),
         ],
@@ -250,6 +260,65 @@ class _ScannedArticles extends State<ScannedArticles> {
         context: context,
         builder: (BuildContext context) {
           return registerAlert;
+        });
+  }
+
+  _showLoginDialog() async {
+    final SharedPreferences prefs = await _prefs;
+    Widget syncButton = TextButton(
+      onPressed: () {
+        if (_formKey.currentState!.validate()) {
+          Navigator.of(context).pop();
+          _syncWithCloud(
+              _articles, _unameController.text, _passwordController.text);
+        }
+      },
+      child: const Text("Sync"),
+    );
+    Widget cancelButton = TextButton(
+      onPressed: () => {Navigator.of(context).pop()},
+      child: const Text("Cancel"),
+    );
+    AlertDialog loginAlert = AlertDialog(
+      title: const Text("Sync"),
+      content: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextFormField(
+                decoration: const InputDecoration(
+                  suffixIcon: Icon(Icons.perm_identity),
+                  // hintText: 'Enter Article Title',
+                  labelText: 'Username',
+                ),
+                enabled: true,
+                controller: _unameController,
+              ),
+              TextFormField(
+                decoration: const InputDecoration(
+                  suffixIcon: Icon(Icons.key),
+                  // hintText: 'Enter Article Title',
+                  labelText: 'Password',
+                ),
+                enabled: true,
+                obscureText: true,
+                controller: _passwordController,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [syncButton, cancelButton],
+    );
+
+    showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          _unameController.text = prefs.getString("username") ?? "";
+          _passwordController.text = prefs.getString("password") ?? "";
+          return loginAlert;
         });
   }
 }
